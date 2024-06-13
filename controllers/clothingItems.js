@@ -36,27 +36,6 @@ const getItems = (req, res) => {
     });
 };
 
-const updateItem = (req, res) => {
-  const { itemId } = req.params;
-  const { imageUrl } = req.body;
-
-  ClothingItem.findByIdAndUpdate(itemId, { $set: { imageUrl } })
-    .orFail()
-    .then((item) => res.status(200).send({ data: item }))
-    .catch((error) => {
-      if (error.name === "ValidationError" || error.name === "CastError") {
-        res
-          .status(INVALID_DATA_ERROR.error)
-          .send({ message: "Invalid data provided" });
-      } else if (error.name === "DocumentNotFoundError") {
-        res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
-      } else {
-        res
-          .status(DEFAULT_ERROR.error)
-          .send({ message: "An error has occured on the server" });
-      }
-    });
-};
 
 const deleteItem = (req, res) => {
   const { itemId } = req.params;
@@ -143,7 +122,6 @@ const dislikeItem = (req, res) => {
 module.exports = {
   createItem,
   getItems,
-  updateItem,
   deleteItem,
   likeItem,
   dislikeItem,
