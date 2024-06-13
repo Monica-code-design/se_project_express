@@ -10,7 +10,7 @@ const createUser = (req, res) => {
 
   User.create({ name, avatar })
     .then((user) => {
-      res.status(200).send({ data: user });
+      res.send({ data: user });
     })
     .catch((error) => {
       if (error.name === "ValidationError") {
@@ -27,7 +27,7 @@ const createUser = (req, res) => {
 
 const getUsers = (req, res) => {
   User.find({})
-    .then((users) => res.status(200).send(users))
+    .then((users) => res.send(users))
     .catch(() => {
       res
         .status(DEFAULT_ERROR.error)
@@ -43,7 +43,7 @@ const getUser = (req, res) => {
       if (!item) {
         res.status(NOTFOUND_ERROR.error).send({ message: "User not found" });
       } else {
-        res.status(200).send({ data: item });
+        res.send({ data: item });
       }
     })
     .catch((error) => {

@@ -28,7 +28,7 @@ const createItem = (req, res) => {
 
 const getItems = (req, res) => {
   ClothingItem.find({})
-    .then((items) => res.status(200).send(items))
+    .then((items) => res.send(items))
     .catch(() => {
       res
         .status(DEFAULT_ERROR.error)
@@ -45,7 +45,7 @@ const deleteItem = (req, res) => {
       if (!item) {
         res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
       } else {
-        res.status(200).send({ data: item });
+        res.send({ data: item });
       }
     })
     .catch((error) => {
@@ -74,7 +74,7 @@ const likeItem = (req, res) => {
       if (!item) {
         res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
       } else {
-        res.status(200).send({ data: item });
+        res.send({ data: item });
       }
     })
     .catch((error) => {
@@ -103,7 +103,7 @@ const dislikeItem = (req, res) => {
       if (!item) {
         res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
       } else {
-        res.status(200).send({ data: item });
+        res.send({ data: item });
       }
     })
     .catch((error) => {
