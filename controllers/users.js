@@ -1,171 +1,127 @@
-const bcrypt = require("bcryptjs");
-const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
+const bcrpyt = require("bcryptjs");
 const User = require("../models/user");
-const {
-  DEFAULT_ERROR,
-  INVALID_DATA_ERROR,
-  NOTFOUND_ERROR,
-  CONFLICT_ERROR,
-} = require("../utils/errors");
+const RESPONSE_CODES = require("../utils/errors");
 const { JWT_SECRET } = require("../utils/config");
 
 const createUser = (req, res) => {
   const { name, avatar, email, password } = req.body;
 
-  if (!password) {
-    res
-      .status(INVALID_DATA_ERROR.error)
-      .send({ message: "Password is required" });
+  if (!email || !password) {
+    return res
+      .status(RESPONSE_CODES.INVALID_DATA)
+      .send({ message: "Email address and password are required." });
   }
 
-  bcrypt
-    .hash(password, 10)
-    .then((hash) => User.create({ name, avatar, email, password: hash }))
-    .then((user) => {
-      res.send({ name, avatar, _id: user._id, email: user.email });
-    })
-    .catch((error) => {
-      if (error.name === "ValidationError") {
-        res
-          .status(INVALID_DATA_ERROR.error)
-          .send({ message: "Invalid data provided" });
-      } else if (error.code === 11000) {
-        res
-          .status(CONFLICT_ERROR.error)
-          .send({ message: "Email already exists in database" });
-      } else {
-        res
-          .status(DEFAULT_ERROR.error)
-          .send({ message: "An error has occurred on the server" });
-      }
-    });
-};
-
-const login = (req, res) => {
-  const { email, password } = req.body;
-
-  User.findUserByCredentials(email, password)
-    .then((user) => {
-      if (!user) {
-        return res.status(401).send({ message: "Email or Password not found" });
-      }
-      return bcrypt.compare(password, user.password).then((matched) => {
-        if (!matched) {
-          res.status(401).send({ message: "Email or Password not found" });
+  return bcrpyt.hash(password, 10).then((hash) => {
+    User.create({ name, avatar, email, password: hash })
+      .then((user) => {
+        const userInfo = user.toObject();
+        delete userInfo.password;
+        return res
+          .status(RESPONSE_CODES.REQUEST_SUCCESSFUL)
+          .send({ data: userInfo });
+      })
+      .catch((err) => {
+        console.error(err);
+        if (err.name === "ValidationError") {
+          return res
+            .status(RESPONSE_CODES.INVALID_DATA)
+            .send({ message: "Invalid data." });
         }
-
-        const token = jwt.sign({ _id: user._id }, JWT_SECRET, {
-          expiresIn: "7d",
-        });
-        res.send({ token });
+        if (err.name === "MongoServerError" && err.code === 11000) {
+          return res
+            .status(RESPONSE_CODES.CONFLICT)
+            .send({ message: "This email address already exists." });
+        }
+        return res
+          .status(RESPONSE_CODES.SERVER_ERROR)
+          .send({ message: "An error has occurred on the server." });
       });
-    })
-    .catch((err) => {
-      if (err.statusCode === 401) {
-        res.status(401).send({ message: "Email or Password not found" });
-      } else {
-        res
-          .status(DEFAULT_ERROR.error)
-          .send({ message: "Internal server error" });
-      }
-    });
+  });
 };
 
-const getUsers = (req, res) => {
-  User.find({})
-    .then((users) => res.status(200).send(users))
-    .catch(() => {
-      res
-        .status(DEFAULT_ERROR.error)
-        .send({ message: "An error has occured on the server" });
+const getCurrentUser = (req, res) => {
+  const { _id } = req.user;
+  User.findById(_id)
+    .orFail()
+    .then((user) => res.status(RESPONSE_CODES.REQUEST_SUCCESSFUL).send(user))
+    .catch((err) => {
+      console.error(err);
+      if (err.name === "DocumentNotFoundError") {
+        return res
+          .status(RESPONSE_CODES.NOT_FOUND)
+          .send({ message: err.message });
+      }
+      if (err.name === "CastError") {
+        return res
+          .status(RESPONSE_CODES.INVALID_DATA)
+          .send({ message: "Invalid data." });
+      }
+      return res
+        .status(RESPONSE_CODES.SERVER_ERROR)
+        .send({ message: "An error has occurred on the server." });
     });
 };
 
 const updateUser = (req, res) => {
   const { name, avatar } = req.body;
-  const userId = req.user._id;
-
   User.findByIdAndUpdate(
-    userId,
+    req.user._id,
     { name, avatar },
     { new: true, runValidators: true }
   )
-    .then((user) => {
-      if (!user) {
-        res.status(NOTFOUND_ERROR.error).send({ message: "User not found" });
+    .orFail()
+    .then((user) => res.status(RESPONSE_CODES.REQUEST_SUCCESSFUL).send(user))
+    .catch((err) => {
+      console.error(err);
+      if (err.name === "DocumentNotFoundError") {
+        return res
+          .status(RESPONSE_CODES.NOT_FOUND)
+          .send({ message: err.message });
       }
-
-      res.status(200).send({ data: user });
-    })
-    .catch((error) => {
-      if (error.name === "ValidationError") {
-        res
-          .status(INVALID_DATA_ERROR.error)
-          .send({ message: "Invalid data provided" });
+      if (err.name === "CastError" || err.name === "ValidationError") {
+        return res
+          .status(RESPONSE_CODES.INVALID_DATA)
+          .send({ message: "Invalid data." });
       }
-
-      res
-        .status(DEFAULT_ERROR.error)
-        .send({ message: "An error has occurred on the server" });
+      return res
+        .status(RESPONSE_CODES.SERVER_ERROR)
+        .send({ message: "An error has occurred on the server." });
     });
 };
 
-const getCurrentUser = (req, res) => {
-  const { _id: userId } = req.user;
+const loginUser = (req, res) => {
+  const { email, password } = req.body;
 
-  User.findById(userId)
-    .then((user) => {
-      if (!user) {
-        res.status(404).send({ message: "User not found" });
-      } else {
-        res.status(200).send({ data: user });
-      }
-    })
-    .catch((error) => {
-      if (error.name === "CastError") {
-        res.status(400).send({ message: "Invalid user ID" });
-      } else {
-        res
-          .status(500)
-          .send({ message: "An error has occurred on the server" });
-      }
-    });
-};
-
-const getUser = (req, res) => {
-  const { userId } = req.params;
-
-  if (!mongoose.Types.ObjectId.isValid(userId)) {
-    res.status(400).send({ message: "Invalid user ID" });
+  if (!email || !password) {
+    return res
+      .status(RESPONSE_CODES.INVALID_DATA)
+      .send({ message: "Email address and password are required" });
   }
 
-  User.findById(userId)
+  return User.findUserByCredentials(email, password)
     .then((user) => {
-      if (!user) {
-        res.status(NOTFOUND_ERROR.error).send({ message: "User not found" });
-      } else {
-        res.status(200).send({ data: user });
-      }
+      const token = jwt.sign({ _id: user._id }, JWT_SECRET, {
+        expiresIn: "7d",
+      });
+      res.status(RESPONSE_CODES.REQUEST_SUCCESSFUL).send({
+        message: "Authentication successful",
+        user: { name: user.name, avatar: user.avatar },
+        token,
+      });
     })
-    .catch((error) => {
-      if (error.name === "CastError") {
-        res
-          .status(INVALID_DATA_ERROR.error)
-          .send({ message: "Invalid user ID" });
-      } else {
-        res
-          .status(DEFAULT_ERROR.error)
-          .send({ message: "An error has occured on the server" });
+    .catch((err) => {
+      console.error(err);
+      if (err.message === "Incorrect email or password.") {
+        return res
+          .status(RESPONSE_CODES.UNAUTHORIZED)
+          .send({ message: "Incorrect email or password." });
       }
+      return res
+        .status(RESPONSE_CODES.SERVER_ERROR)
+        .send({ message: "An error has occurred on the server." });
     });
 };
 
-module.exports = {
-  createUser,
-  updateUser,
-  getCurrentUser,
-  login,
-  getUsers,
-  getUser,
-};
+module.exports = { updateUser, createUser, getCurrentUser, loginUser };

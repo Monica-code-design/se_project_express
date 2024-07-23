@@ -1,167 +1,129 @@
 const ClothingItem = require("../models/clothingItem");
-const {
-  INVALID_DATA_ERROR,
-  NOTFOUND_ERROR,
-  DEFAULT_ERROR,
-  FORBIDDEN_ERROR,
-} = require("../utils/errors");
+const RESPONSE_CODES = require("../utils/errors");
 
 const createItem = (req, res) => {
   const { name, weather, imageUrl } = req.body;
   const owner = req.user._id;
 
   ClothingItem.create({ name, weather, imageUrl, owner })
-    .then((item) => {
-      res.status(201).send(item);
-    })
-    .catch((error) => {
-      if (error.name === "ValidationError") {
-        res
-          .status(INVALID_DATA_ERROR.error)
-          .send({ message: "Invalid data provided" });
-      } else {
-        res
-          .status(DEFAULT_ERROR.error)
-          .send({ message: "An error has occured on the server" });
+    .then((item) =>
+      res.status(RESPONSE_CODES.REQUEST_CREATED).send({ data: item })
+    )
+    .catch((err) => {
+      console.error(err);
+      if (err.name === "ValidationError") {
+        return res
+          .status(RESPONSE_CODES.INVALID_DATA)
+          .send({ message: "Invalid data." });
       }
+      return res
+        .status(RESPONSE_CODES.SERVER_ERROR)
+        .send({ message: "An error has occurred on the server." });
     });
 };
 
 const getItems = (req, res) => {
   ClothingItem.find({})
-    .then((items) => res.status(200).send(items))
-    .catch(() => {
-      res
-        .status(DEFAULT_ERROR.error)
-        .send({ message: "An error has occured on the server" });
-    });
-};
-
-const updateItem = (req, res) => {
-  const { itemId } = req.params;
-  const { imageUrl } = req.body;
-
-  ClothingItem.findByIdAndUpdate(itemId, { $set: { imageUrl } })
-    .orFail()
-    .then((item) => res.status(200).send({ data: item }))
-    .catch((error) => {
-      if (error.name === "ValidationError" || error.name === "CastError") {
-        res
-          .status(INVALID_DATA_ERROR.error)
-          .send({ message: "Invalid data provided" });
-      } else if (error.name === "DocumentNotFoundError") {
-        res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
-      } else {
-        res
-          .status(DEFAULT_ERROR.error)
-          .send({ message: "An error has occured on the server" });
-      }
+    .then((items) => res.status(RESPONSE_CODES.REQUEST_SUCCESSFUL).send(items))
+    .catch((err) => {
+      console.error(err);
+      return res
+        .status(RESPONSE_CODES.SERVER_ERROR)
+        .send({ message: "An error has occurred on the server." });
     });
 };
 
 const deleteItem = (req, res) => {
   const { itemId } = req.params;
-  const { _id: userId } = req.user;
-
-  ClothingItem.findOne({ _id: itemId })
+  ClothingItem.findById(itemId)
+    .orFail()
     .then((item) => {
-      if (!item) {
+      if (!item.owner.equals(req.user._id)) {
         return res
-          .status(NOTFOUND_ERROR.error)
-          .send({ message: "Item not found" });
+        .status(RESPONSE_CODES.FORBIDDEN)
+        .send({ message: "You are not authorized to perform this action." });
       }
-
-      if (!item.owner.equals(userId)) {
-        return res.status(FORBIDDEN_ERROR.error).send({
-          message: "Unauthorized: Only the card owner can delete it",
-        });
-      }
-
-      return ClothingItem.deleteOne({ _id: itemId, owner: userId })
-        .then(() => {
-          res.status(200).send({ message: "Item deleted successfully" });
-        })
-        .catch(() => {
-          res
-            .status(DEFAULT_ERROR.error)
-            .send({ message: "An error has occurred on the server" });
-        });
+      return item
+      .deleteOne()
+      .then(() => res.status(RESPONSE_CODES.REQUEST_SUCCESSFUL).send({ data: item }));
     })
-    .catch((error) => {
-      if (error.name === "CastError") {
+    .catch((err) => {
+      console.error(err);
+      if (err.name === "DocumentNotFoundError") {
         return res
-          .status(INVALID_DATA_ERROR.error)
-          .send({ message: "Invalid item ID" });
+          .status(RESPONSE_CODES.NOT_FOUND)
+          .send({ message: err.message });
       }
-
+      if (err.name === "CastError") {
+        return res
+          .status(RESPONSE_CODES.INVALID_DATA)
+          .send({ message: "Invalid data." });
+      }
       return res
-        .status(DEFAULT_ERROR.error)
-        .send({ message: "An error has occurred on the server" });
+        .status(RESPONSE_CODES.SERVER_ERROR)
+        .send({ message: "An error has occurred on the server." });
     });
 };
 
 const likeItem = (req, res) => {
-  const { itemId } = req.params;
-  const { _id: userId } = req.user;
-
   ClothingItem.findByIdAndUpdate(
-    itemId,
-    { $addToSet: { likes: userId } },
+    req.params.itemId,
+    { $addToSet: { likes: req.user._id } },
     { new: true }
   )
-    .then((item) => {
-      if (!item) {
-        res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
-      } else {
-        res.status(200).send({ data: item });
+    .orFail()
+    .then((item) =>
+      res.status(RESPONSE_CODES.REQUEST_SUCCESSFUL).send({ data: item })
+    )
+    .catch((err) => {
+      console.error(err);
+      if (err.name === "DocumentNotFoundError") {
+        return res
+          .status(RESPONSE_CODES.NOT_FOUND)
+          .send({ message: err.message });
       }
-    })
-    .catch((error) => {
-      if (error.name === "CastError") {
-        res
-          .status(INVALID_DATA_ERROR.error)
-          .send({ message: "Invalid item ID" });
-      } else {
-        res
-          .status(DEFAULT_ERROR.error)
-          .send({ message: "An error has occured on the server" });
+      if (err.name === "CastError") {
+        return res
+          .status(RESPONSE_CODES.INVALID_DATA)
+          .send({ message: "Invalid data." });
       }
+      return res
+        .status(RESPONSE_CODES.SERVER_ERROR)
+        .send({ message: "An error has occurred on the server." });
     });
 };
 
 const dislikeItem = (req, res) => {
-  const { itemId } = req.params;
-  const { _id: userId } = req.user;
-
   ClothingItem.findByIdAndUpdate(
-    itemId,
-    { $pull: { likes: userId } },
+    req.params.itemId,
+    { $pull: { likes: req.user._id } },
     { new: true }
   )
-    .then((item) => {
-      if (!item) {
-        res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
-      } else {
-        res.status(200).send({ data: item });
+    .orFail()
+    .then((item) =>
+      res.status(RESPONSE_CODES.REQUEST_SUCCESSFUL).send({ data: item })
+    )
+    .catch((err) => {
+      console.error(err);
+      if (err.name === "DocumentNotFoundError") {
+        return res
+          .status(RESPONSE_CODES.NOT_FOUND)
+          .send({ message: err.message });
       }
-    })
-    .catch((error) => {
-      if (error.name === "CastError") {
-        res
-          .status(INVALID_DATA_ERROR.error)
-          .send({ message: "Invalid item ID" });
-      } else {
-        res
-          .status(DEFAULT_ERROR.error)
-          .send({ message: "An error has occured on the server" });
+      if (err.name === "CastError") {
+        return res
+          .status(RESPONSE_CODES.INVALID_DATA)
+          .send({ message: "Invalid data." });
       }
+      return res
+        .status(RESPONSE_CODES.SERVER_ERROR)
+        .send({ message: "An error has occurred on the server." });
     });
 };
 
 module.exports = {
   createItem,
   getItems,
-  updateItem,
   deleteItem,
   likeItem,
   dislikeItem,

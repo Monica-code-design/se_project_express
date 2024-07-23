@@ -1,32 +1,12 @@
-const INVALID_DATA_ERROR = {
-  status: "BadRequest",
-  error: 400,
-};
+const RESPONSE_CODES = {
+  REQUEST_SUCCESSFUL: 200,
+  REQUEST_CREATED: 201,
+  INVALID_DATA: 400,
+  NOT_FOUND: 404,
+  SERVER_ERROR: 500,
+  UNAUTHORIZED: 401,
+  CONFLICT: 409,
+  FORBIDDEN: 403,
+}
 
-const FORBIDDEN_ERROR = {
-  status: "Forbidden",
-  error: 403,
-};
-
-const NOTFOUND_ERROR = {
-  status: "NotFound",
-  error: 404,
-};
-
-const CONFLICT_ERROR = {
-  status: "Conflict",
-  error: 409,
-};
-
-const DEFAULT_ERROR = {
-  status: "InternalServerError",
-  error: 500,
-};
-
-module.exports = {
-  INVALID_DATA_ERROR,
-  NOTFOUND_ERROR,
-  DEFAULT_ERROR,
-  FORBIDDEN_ERROR,
-  CONFLICT_ERROR,
-};
+module.exports = RESPONSE_CODES;
