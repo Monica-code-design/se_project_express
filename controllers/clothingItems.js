@@ -3,7 +3,8 @@ const {
   INVALID_DATA_ERROR,
   NOTFOUND_ERROR,
   DEFAULT_ERROR,
-} = require("../utils/error");
+  FORBIDDEN_ERROR,
+} = require("../utils/errors");
 
 const createItem = (req, res) => {
   const { name, weather, imageUrl } = req.body;
@@ -28,7 +29,7 @@ const createItem = (req, res) => {
 
 const getItems = (req, res) => {
   ClothingItem.find({})
-    .then((items) => res.send(items))
+    .then((items) => res.status(200).send(items))
     .catch(() => {
       res
         .status(DEFAULT_ERROR.error)
@@ -36,28 +37,66 @@ const getItems = (req, res) => {
     });
 };
 
-
-const deleteItem = (req, res) => {
+const updateItem = (req, res) => {
   const { itemId } = req.params;
+  const { imageUrl } = req.body;
 
-  ClothingItem.findByIdAndDelete(itemId)
-    .then((item) => {
-      if (!item) {
-        res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
-      } else {
-        res.send({ data: item });
-      }
-    })
+  ClothingItem.findByIdAndUpdate(itemId, { $set: { imageUrl } })
+    .orFail()
+    .then((item) => res.status(200).send({ data: item }))
     .catch((error) => {
-      if (error.name === "CastError") {
+      if (error.name === "ValidationError" || error.name === "CastError") {
         res
           .status(INVALID_DATA_ERROR.error)
-          .send({ message: "Invalid item ID" });
+          .send({ message: "Invalid data provided" });
+      } else if (error.name === "DocumentNotFoundError") {
+        res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
       } else {
         res
           .status(DEFAULT_ERROR.error)
           .send({ message: "An error has occured on the server" });
       }
+    });
+};
+
+const deleteItem = (req, res) => {
+  const { itemId } = req.params;
+  const { _id: userId } = req.user;
+
+  ClothingItem.findOne({ _id: itemId })
+    .then((item) => {
+      if (!item) {
+        return res
+          .status(NOTFOUND_ERROR.error)
+          .send({ message: "Item not found" });
+      }
+
+      if (!item.owner.equals(userId)) {
+        return res.status(FORBIDDEN_ERROR.error).send({
+          message: "Unauthorized: Only the card owner can delete it",
+        });
+      }
+
+      return ClothingItem.deleteOne({ _id: itemId, owner: userId })
+        .then(() => {
+          res.status(200).send({ message: "Item deleted successfully" });
+        })
+        .catch(() => {
+          res
+            .status(DEFAULT_ERROR.error)
+            .send({ message: "An error has occurred on the server" });
+        });
+    })
+    .catch((error) => {
+      if (error.name === "CastError") {
+        return res
+          .status(INVALID_DATA_ERROR.error)
+          .send({ message: "Invalid item ID" });
+      }
+
+      return res
+        .status(DEFAULT_ERROR.error)
+        .send({ message: "An error has occurred on the server" });
     });
 };
 
@@ -74,7 +113,7 @@ const likeItem = (req, res) => {
       if (!item) {
         res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
       } else {
-        res.send({ data: item });
+        res.status(200).send({ data: item });
       }
     })
     .catch((error) => {
@@ -103,7 +142,7 @@ const dislikeItem = (req, res) => {
       if (!item) {
         res.status(NOTFOUND_ERROR.error).send({ message: "Item not found" });
       } else {
-        res.send({ data: item });
+        res.status(200).send({ data: item });
       }
     })
     .catch((error) => {
@@ -122,8 +161,8 @@ const dislikeItem = (req, res) => {
 module.exports = {
   createItem,
   getItems,
+  updateItem,
   deleteItem,
   likeItem,
   dislikeItem,
 };
-
