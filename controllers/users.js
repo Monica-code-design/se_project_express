@@ -98,7 +98,7 @@ const updateUserProfile = (req, res) => {
 
   return User.findByIdAndUpdate(
     userId,
-    { name, email, avatar },
+    { name, avatar },
     { new: true, runValidators: true },
   )
     .then((user) => {
